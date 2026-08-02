@@ -105,6 +105,10 @@ def run_sweep(freqs, settle_s, poll_s, dwell_s):
                 break
 
             radio.set_frequency_hz(hz)
+            with sweep_state.lock:
+                sweep_state.log.append({"freq_hz": hz, "status": "pending", "elapsed_s": None})
+                row_index = len(sweep_state.log) - 1
+
             time.sleep(settle_s)
             radio.tuner_start()
 
@@ -115,24 +119,29 @@ def run_sweep(freqs, settle_s, poll_s, dwell_s):
             # RI as a bonus - if it ever does report "stopped" early, we take
             # it - but the dwell itself is what you should actually tune.
             start = time.monotonic()
-            time.sleep(poll_s)
             status = "dwell"
-            while time.monotonic() - start < dwell_s:
-                if sweep_state.stop_requested:
-                    status = "stopped"
-                    break
-                tuning = radio.tuner_is_tuning()
-                if tuning is False:
-                    status = "ok"
-                    break
+            try:
                 time.sleep(poll_s)
-            radio.tuner_stop()
+                while time.monotonic() - start < dwell_s:
+                    if sweep_state.stop_requested:
+                        status = "stopped"
+                        break
+                    tuning = radio.tuner_is_tuning()
+                    if tuning is False:
+                        status = "ok"
+                        break
+                    time.sleep(poll_s)
+            finally:
+                # Always leave the tuner ON (not bypassed), even if something
+                # above raised - a half-finished step shouldn't strand the
+                # radio without its tuner in circuit.
+                radio.tuner_enable()
 
             elapsed = time.monotonic() - start
             with sweep_state.lock:
-                sweep_state.log.append(
-                    {"freq_hz": hz, "status": status, "elapsed_s": round(elapsed, 1)}
-                )
+                sweep_state.log[row_index] = {
+                    "freq_hz": hz, "status": status, "elapsed_s": round(elapsed, 1)
+                }
                 sweep_state.done += 1
 
             if status == "stopped":
@@ -141,6 +150,13 @@ def run_sweep(freqs, settle_s, poll_s, dwell_s):
         with sweep_state.lock:
             sweep_state.error = str(exc)
     finally:
+        with radio_state.lock:
+            radio = radio_state.radio
+        if radio is not None:
+            try:
+                radio.tuner_enable()
+            except Exception:
+                pass
         with sweep_state.lock:
             sweep_state.running = False
 
@@ -152,7 +168,19 @@ def index():
 
 @app.route("/licenses")
 def licenses():
-    return jsonify(licenses=load_licenses(), default_license_id=DEFAULT_LICENSE_ID)
+    # jsonify alphabetizes dict keys by default, which would silently
+    # scramble band order (e.g. "6m" sorting before "80m"); band order is
+    # sent as a list of {band, ranges} instead, since arrays aren't reordered.
+    data = [
+        {
+            "license_id": lic["license_id"],
+            "license_name": lic["license_name"],
+            "country_group": lic["country_group"],
+            "bands": [{"band": band, "ranges": ranges} for band, ranges in lic["bands"].items()],
+        }
+        for lic in load_licenses()
+    ]
+    return jsonify(licenses=data, default_license_id=DEFAULT_LICENSE_ID)
 
 
 @app.route("/ports")
@@ -209,7 +237,7 @@ def disconnect():
     with radio_state.lock:
         if radio_state.radio is not None:
             try:
-                radio_state.radio.tuner_stop()
+                radio_state.radio.tuner_enable()
             except Exception:
                 pass
             try:

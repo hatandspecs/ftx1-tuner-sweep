@@ -17,8 +17,9 @@
          font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
   h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
   .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: .9rem; }
-  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 1.5rem; align-items: start; }
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 1.5rem; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+  .panel.log-panel { display: flex; flex-direction: column; }
   fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 1rem; padding: .75rem; }
   legend { padding: 0 .4rem; font-size: .8rem; color: var(--muted); }
   label { display: block; font-size: .85rem; margin: .4rem 0 .15rem; }
@@ -47,9 +48,10 @@
   th { color: var(--muted); font-weight: 600; }
   .status-ok { color: var(--ok); font-weight: 600; }
   .status-dwell { color: var(--accent); font-weight: 600; }
+  .status-pending { color: var(--warn); font-weight: 600; }
   .status-stopped { color: var(--muted); font-weight: 600; }
   .error { color: var(--bad); font-size: .85rem; margin-top: .5rem; }
-  .log-wrap { max-height: 45vh; overflow-y: auto; }
+  .log-wrap { flex: 1; min-height: 0; overflow-y: auto; }
 
   .conn-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
   .dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--bad); flex: none; }
@@ -81,7 +83,7 @@
         <span id="conn-label" class="conn-label">Disconnected</span>
       </div>
       <label for="port">Serial port (CAT-1 / Enhanced COM Port)</label>
-      <input list="port-list" id="port" type="text" placeholder="e.g. /dev/ttyUSB0 or COM5">
+      <input list="port-list" id="port" type="text" value="/dev/ttyUSB0" placeholder="e.g. /dev/ttyUSB0 or COM5">
       <datalist id="port-list"></datalist>
       <label for="baud">Baud rate</label>
       <input id="baud" type="number" value="38400">
@@ -172,7 +174,7 @@
     <div id="error" class="error"></div>
   </div>
 
-  <div class="panel">
+  <div class="panel log-panel">
     <div class="stats">
       <span id="progress-text">Idle</span>
       <span id="count-text"></span>
@@ -192,8 +194,17 @@ const $ = (id) => document.getElementById(id);
 let polling = null;
 let LICENSES = [];
 
+// MHz.kHz.Hz grouped display (e.g. 14235000 -> "14.235.000"), used
+// everywhere except the live VFO readout.
+function fmtFreqGrouped(hz) {
+  const mhz = Math.floor(hz / 1e6);
+  const khz = Math.floor((hz % 1e6) / 1000);
+  const hzRem = hz % 1000;
+  return `${mhz}.${String(khz).padStart(3, '0')}.${String(hzRem).padStart(3, '0')}`;
+}
+
 function fmtRange(r) {
-  return (r[0] / 1e6).toFixed(4) + '–' + (r[1] / 1e6).toFixed(4) + ' MHz';
+  return fmtFreqGrouped(r[0]) + '–' + fmtFreqGrouped(r[1]) + ' MHz';
 }
 
 async function loadLicenses() {
@@ -228,7 +239,7 @@ function renderBandCheckboxes() {
   if (!lic) return;
 
   const preferred = ['40m', '20m', '15m', '10m'];
-  for (const [band, ranges] of Object.entries(lic.bands)) {
+  for (const { band, ranges } of lic.bands) {
     const label = document.createElement('label');
     const cb = document.createElement('input');
     cb.type = 'checkbox';
@@ -260,7 +271,9 @@ async function loadPorts() {
     opt.value = p;
     dl.appendChild(opt);
   }
-  if (ports.length && !$('port').value) $('port').value = ports[0];
+  if (!$('port').value) {
+    $('port').value = ports.includes('/dev/ttyUSB0') ? '/dev/ttyUSB0' : (ports[0] || '/dev/ttyUSB0');
+  }
 }
 
 function fmtFreq(hz) {
@@ -309,9 +322,11 @@ function renderSweep(state) {
   body.innerHTML = '';
   for (const row of state.log.slice().reverse()) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${fmtFreq(row.freq_hz)}</td>
-                     <td class="status-${row.status}">${row.status}</td>
-                     <td>${row.elapsed_s}s</td>`;
+    const elapsed = row.elapsed_s == null ? '—' : row.elapsed_s + 's';
+    const statusText = row.status === 'pending' ? 'tuning…' : row.status;
+    tr.innerHTML = `<td>${fmtFreqGrouped(row.freq_hz)}</td>
+                     <td class="status-${row.status}">${statusText}</td>
+                     <td>${elapsed}</td>`;
     body.appendChild(tr);
   }
 }

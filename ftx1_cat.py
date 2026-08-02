@@ -169,9 +169,13 @@ class FTX1:
         with self._lock:
             self._write("AC103;")
 
-    def tuner_stop(self):
+    def tuner_enable(self):
+        """Stop any active tuning cycle but leave the tuner ON (in circuit),
+        AC1,0,1 - as opposed to AC1,0,0 which switches it fully off/bypassed.
+        Used between sweep steps and at the end, so the radio isn't left with
+        the tuner bypassed after a sweep."""
         with self._lock:
-            self._write("AC100;")
+            self._write("AC101;")
 
     # -- reads (status / sweep completion) --------------------------------
 
