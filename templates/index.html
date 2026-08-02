@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FTX-1 Tuner Sweep</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --panel: #ffffff; --text: #1a1a1a; --muted: #666;
+    --border: #ddd; --accent: #2563eb; --ok: #16a34a; --bad: #dc2626; --warn: #d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16181d; --panel: #1e2128; --text: #e8e8e8; --muted: #9aa0a6;
+             --border: #33363d; --accent: #5b9dff; --ok: #4ade80; --bad: #f87171; --warn: #fbbf24; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 2rem; background: var(--bg); color: var(--text);
+         font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
+  .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: .9rem; }
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 1.5rem; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+  fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 1rem; padding: .75rem; }
+  legend { padding: 0 .4rem; font-size: .8rem; color: var(--muted); }
+  label { display: block; font-size: .85rem; margin: .4rem 0 .15rem; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: .4rem .5rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font-size: .9rem;
+  }
+  .bands { display: flex; flex-direction: column; gap: .3rem; }
+  .bands label { display: flex; align-items: center; gap: .4rem; font-size: .85rem; margin: 0; }
+  .row { display: flex; gap: .5rem; }
+  .row > div { flex: 1; }
+  button { border: none; border-radius: 6px; padding: .55rem 1rem; font-size: .9rem; cursor: pointer; }
+  #start { background: var(--accent); color: #fff; }
+  #stop, #disconnect { background: var(--bad); color: #fff; }
+  #connect { background: var(--ok); color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .checklist { font-size: .85rem; line-height: 1.5; background: var(--bg); border: 1px solid var(--warn);
+               border-radius: 8px; padding: .75rem; margin-bottom: 1rem; }
+  .checklist summary { cursor: pointer; color: var(--warn); font-weight: 600; }
+  .checklist ul { margin: .5rem 0 0; padding-left: 1.2rem; }
+  .confirm { display: flex; gap: .5rem; align-items: flex-start; margin-top: .75rem; font-size: .85rem; }
+  progress { width: 100%; height: 10px; accent-color: var(--accent); }
+  .stats { display: flex; justify-content: space-between; font-size: .85rem; color: var(--muted); margin: .4rem 0; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .status-ok { color: var(--ok); font-weight: 600; }
+  .status-dwell { color: var(--accent); font-weight: 600; }
+  .status-stopped { color: var(--muted); font-weight: 600; }
+  .error { color: var(--bad); font-size: .85rem; margin-top: .5rem; }
+  .log-wrap { max-height: 45vh; overflow-y: auto; }
+
+  .conn-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+  .dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--bad); flex: none; }
+  .dot.connected { background: var(--ok); }
+  .conn-label { font-size: .85rem; font-weight: 600; }
+
+  .telemetry { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 1rem; }
+  .telemetry .full { grid-column: 1 / -1; }
+  .tele-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .tele-value { font-size: 1.1rem; font-weight: 600; }
+  .tele-value.big { font-size: 1.6rem; }
+  .tele-value.dim { color: var(--muted); font-weight: 400; }
+  .tuning-badge { display: inline-block; padding: .1rem .5rem; border-radius: 4px; font-size: .85rem; }
+  .tuning-badge.active { background: var(--accent); color: #fff; }
+  .tuning-badge.idle { background: var(--border); color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>FTX-1 Tuner Sweep</h1>
+<p class="subtitle">Steps the FTX-1's VFO across selected bands and triggers the external tuner at each stop, to build up its tuning memories on a new antenna.</p>
+
+<div class="layout">
+  <div class="panel">
+    <fieldset>
+      <legend>Connection</legend>
+      <div class="conn-header">
+        <div id="conn-dot" class="dot"></div>
+        <span id="conn-label" class="conn-label">Disconnected</span>
+      </div>
+      <label for="port">Serial port (CAT-1 / Enhanced COM Port)</label>
+      <input list="port-list" id="port" type="text" placeholder="e.g. /dev/ttyUSB0 or COM5">
+      <datalist id="port-list"></datalist>
+      <label for="baud">Baud rate</label>
+      <input id="baud" type="number" value="38400">
+      <div class="row" style="margin-top:.6rem">
+        <button id="connect">Connect</button>
+        <button id="disconnect" disabled>Disconnect</button>
+      </div>
+      <div id="conn-error" class="error"></div>
+
+      <div class="telemetry">
+        <div>
+          <div class="tele-label">VFO</div>
+          <div id="tele-freq" class="tele-value big dim">&mdash;</div>
+        </div>
+        <div>
+          <div class="tele-label">Mode</div>
+          <div id="tele-mode" class="tele-value dim">&mdash;</div>
+        </div>
+        <div>
+          <div class="tele-label">Power</div>
+          <div id="tele-power" class="tele-value dim">&mdash;</div>
+        </div>
+        <div>
+          <div class="tele-label">Tuner</div>
+          <div id="tele-tuning"><span class="tuning-badge idle">idle</span></div>
+        </div>
+      </div>
+    </fieldset>
+
+    <details class="checklist">
+      <summary>Pre-flight checklist</summary>
+      <ul>
+        <li>Radio menu: OPERATION SETTING &rarr; GENERAL &rarr; <b>TUN/LIN PORT SELECT</b> = <b>EXT-TUNER</b></li>
+        <li>Radio menu: OPERATION SETTING &rarr; GENERAL &rarr; <b>TUNER SELECT</b> = <b>EXT</b></li>
+        <li>mAT-30 connected to the TUNER/LINEAR jack with the mAT-CY cable, antenna connected to the mAT-30 output</li>
+        <li>Radio power set low (e.g. 10-20W) for the sweep</li>
+        <li>Chosen frequency ranges fall inside your license privileges</li>
+        <li>You've run one manual test frequency successfully before sweeping a full band</li>
+      </ul>
+    </details>
+
+    <fieldset>
+      <legend>Licence &amp; bands</legend>
+      <label for="license">Licence class</label>
+      <select id="license"></select>
+      <div id="license-caveat" class="error" style="color:var(--warn)"></div>
+      <div id="bands" class="bands" style="margin-top:.6rem"></div>
+      <label for="custom">Custom range(s), Hz (comma-separated lo-hi)</label>
+      <input id="custom" type="text" placeholder="7100000-7150000, 14200000-14275000">
+    </fieldset>
+
+    <fieldset>
+      <legend>Sweep settings</legend>
+      <label for="step">Step (Hz)</label>
+      <input id="step" type="number" value="10000">
+      <div class="row">
+        <div>
+          <label for="settle">Settle (ms)</label>
+          <input id="settle" type="number" value="300">
+        </div>
+        <div>
+          <label for="poll">Poll interval (ms)</label>
+          <input id="poll" type="number" value="300">
+        </div>
+        <div>
+          <label for="dwell">Tune dwell (s)</label>
+          <input id="dwell" type="number" value="5">
+        </div>
+      </div>
+      <p style="font-size:.75rem; color:var(--muted); margin:.5rem 0 0">
+        Dwell is a fixed wait per frequency, not an adaptive timeout - the
+        radio can't reliably report when an external tuner like the mAT-30
+        has finished, so it just holds each frequency for this long before
+        moving on. Set it to comfortably cover your tuner's typical cycle
+        time.
+      </p>
+    </fieldset>
+
+    <label class="confirm">
+      <input type="checkbox" id="confirmed">
+      <span>I've confirmed the pre-flight checklist above.</span>
+    </label>
+
+    <div class="row" style="margin-top:1rem">
+      <button id="start">Start sweep</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+    <div id="error" class="error"></div>
+  </div>
+
+  <div class="panel">
+    <div class="stats">
+      <span id="progress-text">Idle</span>
+      <span id="count-text"></span>
+    </div>
+    <progress id="progress" value="0" max="1"></progress>
+    <div class="log-wrap">
+      <table>
+        <thead><tr><th>Frequency</th><th>Status</th><th>Elapsed</th></tr></thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let polling = null;
+let LICENSES = [];
+
+function fmtRange(r) {
+  return (r[0] / 1e6).toFixed(4) + '–' + (r[1] / 1e6).toFixed(4) + ' MHz';
+}
+
+async function loadLicenses() {
+  const res = await fetch('/licenses');
+  const data = await res.json();
+  LICENSES = data.licenses;
+
+  const sel = $('license');
+  sel.innerHTML = '';
+  let currentGroup = null;
+  let group = null;
+  for (const lic of LICENSES) {
+    if (lic.country_group !== currentGroup) {
+      currentGroup = lic.country_group;
+      group = document.createElement('optgroup');
+      group.label = currentGroup;
+      sel.appendChild(group);
+    }
+    const opt = document.createElement('option');
+    opt.value = lic.license_id;
+    opt.textContent = lic.license_name;
+    group.appendChild(opt);
+  }
+  sel.value = data.default_license_id;
+  renderBandCheckboxes();
+}
+
+function renderBandCheckboxes() {
+  const lic = LICENSES.find(l => l.license_id === $('license').value);
+  const container = $('bands');
+  container.innerHTML = '';
+  if (!lic) return;
+
+  const preferred = ['40m', '20m', '15m', '10m'];
+  for (const [band, ranges] of Object.entries(lic.bands)) {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'band';
+    cb.value = band;
+    cb.checked = preferred.includes(band);
+    label.appendChild(cb);
+    const span = document.createElement('span');
+    span.textContent = ` ${band} (${ranges.map(fmtRange).join(', ')})`;
+    label.appendChild(span);
+    container.appendChild(label);
+  }
+
+  const isRef = lic.license_id.endsWith('_ref') || lic.license_id.startsWith('ca_');
+  $('license-caveat').textContent = isRef
+    ? 'Reference/approximate privileges - verify exact figures for your licence before relying on this.'
+    : '';
+}
+
+$('license').addEventListener('change', renderBandCheckboxes);
+
+async function loadPorts() {
+  const res = await fetch('/ports');
+  const ports = await res.json();
+  const dl = $('port-list');
+  dl.innerHTML = '';
+  for (const p of ports) {
+    const opt = document.createElement('option');
+    opt.value = p;
+    dl.appendChild(opt);
+  }
+  if (ports.length && !$('port').value) $('port').value = ports[0];
+}
+
+function fmtFreq(hz) {
+  return (hz / 1e6).toFixed(4) + ' MHz';
+}
+
+function renderRadio(r) {
+  $('conn-dot').classList.toggle('connected', r.connected);
+  $('conn-label').textContent = r.connected ? `Connected (${r.port} @ ${r.baud})` : 'Disconnected';
+  $('connect').disabled = r.connected;
+  $('disconnect').disabled = !r.connected;
+  $('conn-error').textContent = r.connected ? '' : (r.error || '');
+
+  const freqEl = $('tele-freq'), modeEl = $('tele-mode'), powEl = $('tele-power'), tuneEl = $('tele-tuning');
+  if (r.connected && r.freq_hz != null) {
+    freqEl.textContent = fmtFreq(r.freq_hz);
+    freqEl.classList.remove('dim');
+  } else {
+    freqEl.textContent = '—';
+    freqEl.classList.add('dim');
+  }
+  modeEl.textContent = (r.connected && r.mode) ? r.mode : '—';
+  modeEl.classList.toggle('dim', !(r.connected && r.mode));
+  powEl.textContent = (r.connected && r.power_w != null) ? r.power_w + ' W' : '—';
+  powEl.classList.toggle('dim', !(r.connected && r.power_w != null));
+  if (r.connected && r.tuning) {
+    tuneEl.innerHTML = '<span class="tuning-badge active">tuning</span>';
+  } else {
+    tuneEl.innerHTML = '<span class="tuning-badge idle">idle</span>';
+  }
+
+  // Sweep can only run while connected.
+  $('start').disabled = $('start').disabled || !r.connected;
+}
+
+function renderSweep(state) {
+  $('start').disabled = state.running;
+  $('stop').disabled = !state.running;
+  $('progress-text').textContent = state.running ? 'Sweeping…' : (state.total ? 'Finished' : 'Idle');
+  $('count-text').textContent = state.total ? `${state.done} / ${state.total}` : '';
+  $('progress').max = state.total || 1;
+  $('progress').value = state.done;
+  $('error').textContent = state.error || '';
+
+  const body = $('log-body');
+  body.innerHTML = '';
+  for (const row of state.log.slice().reverse()) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${fmtFreq(row.freq_hz)}</td>
+                     <td class="status-${row.status}">${row.status}</td>
+                     <td>${row.elapsed_s}s</td>`;
+    body.appendChild(tr);
+  }
+}
+
+async function poll() {
+  const res = await fetch('/status');
+  const data = await res.json();
+  renderSweep(data.sweep);
+  renderRadio(data.radio);
+}
+
+if (!polling) polling = setInterval(poll, 1000);
+
+$('connect').addEventListener('click', async () => {
+  $('conn-error').textContent = '';
+  const res = await fetch('/connect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ port: $('port').value, baud: $('baud').value }),
+  });
+  const data = await res.json();
+  if (!data.ok) $('conn-error').textContent = data.error;
+  poll();
+});
+
+$('disconnect').addEventListener('click', async () => {
+  await fetch('/disconnect', { method: 'POST' });
+  poll();
+});
+
+$('start').addEventListener('click', async () => {
+  $('error').textContent = '';
+  const bands = Array.from(document.querySelectorAll('.band:checked')).map(b => b.value);
+  const custom = $('custom').value.split(',').map(s => s.trim()).filter(Boolean);
+
+  const payload = {
+    license_id: $('license').value,
+    bands,
+    custom_ranges: custom,
+    step_hz: $('step').value,
+    settle_ms: $('settle').value,
+    poll_ms: $('poll').value,
+    dwell_s: $('dwell').value,
+    confirmed: $('confirmed').checked,
+  };
+
+  const res = await fetch('/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    $('error').textContent = data.error;
+    return;
+  }
+  poll();
+});
+
+$('stop').addEventListener('click', async () => {
+  await fetch('/stop', { method: 'POST' });
+});
+
+loadLicenses();
+loadPorts();
+poll();
+</script>
+</body>
+</html>
