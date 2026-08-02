@@ -119,15 +119,16 @@
         <li>Radio menu: OPERATION SETTING &rarr; GENERAL &rarr; <b>TUN/LIN PORT SELECT</b> = <b>EXT-TUNER</b></li>
         <li>Radio menu: OPERATION SETTING &rarr; GENERAL &rarr; <b>TUNER SELECT</b> = <b>EXT</b></li>
         <li>mAT-30 connected to the TUNER/LINEAR jack with the mAT-CY cable, antenna connected to the mAT-30 output</li>
-        <li>Radio power set low (e.g. 10-20W) for the sweep</li>
+        <li>Radio power set to the minimum useful for tuning - 5W or less</li>
         <li>Chosen frequency ranges fall inside your license privileges</li>
         <li>You've run one manual test frequency successfully before sweeping a full band</li>
+        <li>The band sounds dead or nearly so - listen first, and hit <b>Stop</b> right away if you're about to sweep across someone</li>
       </ul>
     </details>
 
     <fieldset>
-      <legend>Licence &amp; bands</legend>
-      <label for="license">Licence class</label>
+      <legend>License &amp; bands</legend>
+      <label for="license">License class</label>
       <select id="license"></select>
       <div id="license-caveat" class="error" style="color:var(--warn)"></div>
       <div id="bands" class="bands" style="margin-top:.6rem"></div>
@@ -255,7 +256,7 @@ function renderBandCheckboxes() {
 
   const isRef = lic.license_id.endsWith('_ref') || lic.license_id.startsWith('ca_');
   $('license-caveat').textContent = isRef
-    ? 'Reference/approximate privileges - verify exact figures for your licence before relying on this.'
+    ? 'Reference/approximate privileges - verify exact figures for your license before relying on this.'
     : '';
 }
 

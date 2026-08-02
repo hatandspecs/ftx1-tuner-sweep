@@ -1,6 +1,6 @@
-# `bandplans.tsv`: licence/band data
+# `bandplans.tsv`: license/band data
 
-The list of licence classes and which frequencies they're allowed on lives
+The list of license classes and which frequencies they're allowed on lives
 in `bandplans.tsv` at the project root, not in the code. The app re-reads it
 on every request to `/licenses`, so you can edit it and just refresh the
 browser - no restart needed.
@@ -24,11 +24,11 @@ A band with a mode-restricted split (e.g. US General's 80m has a separate
 CW/data segment and phone segment) is just **multiple rows** with the same
 `license_id` and `band` but different edges. The app unions them: checking
 "80m" in the UI sweeps every segment listed for that band under that
-licence.
+license.
 
 The `US` country group always sorts first in the dropdown, and `us_general`
 is the default selection (see `DEFAULT_LICENSE_ID` in `ftx1_cat.py`). Within
-a group, licences keep the TSV's row order (so e.g. Technician / General /
+a group, licenses keep the TSV's row order (so e.g. Technician / General /
 Extra appear in that order, not alphabetically) - list them in the order you
 want them to appear.
 
@@ -46,20 +46,20 @@ want them to appear.
 - **Europe / Japan / Central & South America**: these are `_ref` entries -
   outer-bound *reference* allocations only (the physical ITU Region 1/2/3
   amateur spectrum, taken from the same FCC document's international
-  columns), **not** real per-country licence-class tables. There is no
-  single "CEPT licence" frequency table to encode: CEPT reciprocity
+  columns), **not** real per-country license-class tables. There is no
+  single "CEPT license" frequency table to encode: CEPT reciprocity
   (`refs/cept_novice_ecc_rec_05_06.pdf`) just recognizes your *home*
-  licence's privileges as translated by whichever country you're visiting -
+  license's privileges as translated by whichever country you're visiting -
   it isn't a harmonized band plan. Japan's JARL classes do restrict by both
   frequency and power, but the exact per-class table wasn't available from
   a source reliable enough to encode here. Treat these three groups as "stay
   inside this outer boundary," not as your actual privileges, and correct/
-  replace them with real data for your specific country and licence if you
+  replace them with real data for your specific country and license if you
   have it - that's exactly what this file is for.
 
 ## Adding your own entries
 
-Add rows for your country/licence class following the pattern above. If you
+Add rows for your country/license class following the pattern above. If you
 have a real source (a regulator's published band chart, not a summary
 article), cite it in `source` and set today's date in `verified_date`. PRs
 or edits that replace a `_ref` placeholder with real per-class data are
