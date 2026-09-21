@@ -132,3 +132,7 @@ setting.
 
 Read the pre-flight checklist in the UI and in the docs before pointing
 this at an antenna.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Use it, change it, no warranty.
